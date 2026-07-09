@@ -10,6 +10,7 @@ type Result struct {
 	RetryAfter time.Duration
 	Remaining  int
 	Limit      int
+	Reset      time.Time
 }
 
 type entry struct {
@@ -41,7 +42,8 @@ func (s *MemoryStore) Allow(key string, rate, burst float64) Result {
 		s.entries[key] = e
 	}
 	allowed, retry, remaining := e.bucket.Take(now, rate, burst)
-	return Result{OK: allowed, RetryAfter: retry, Remaining: remaining, Limit: int(burst)}
+	reset := now.Add(time.Duration((burst - e.bucket.tokens) / rate * float64(time.Second)))
+	return Result{OK: allowed, RetryAfter: retry, Remaining: remaining, Limit: int(burst), Reset: reset}
 }
 
 func (s *MemoryStore) evictLoop(interval time.Duration) {

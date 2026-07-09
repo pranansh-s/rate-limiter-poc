@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"net/http"
+
+	"github.com/prananshsingh/rate-limiter-poc/limiter"
 )
 
 func main() {
@@ -12,6 +14,9 @@ func main() {
 		w.Write([]byte("pong\n"))
 	})
 
+	store := limiter.NewMemoryStore()
+	handler := limiter.Limit(store, 10, 20, mux)
+
 	log.Println("listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	log.Fatal(http.ListenAndServe(":8080", handler))
 }
