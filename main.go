@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/http"
 
@@ -8,6 +9,14 @@ import (
 )
 
 func main() {
+	configPath := flag.String("config", "config.json", "path to rules config")
+	flag.Parse()
+
+	cfg, err := LoadConfig(*configPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
@@ -15,7 +24,7 @@ func main() {
 	})
 
 	store := limiter.NewMemoryStore()
-	handler := limiter.Limit(store, 10, 20, mux)
+	handler := limiter.Limit(store, cfg.Rules, mux)
 
 	log.Println("listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
