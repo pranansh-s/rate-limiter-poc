@@ -1,5 +1,8 @@
 {
   "rules": [
-    { "name": "ip-burst", "scope": "ip", "rate": 10, "burst": 20 }
+    { "name": "ip-burst",  "scope": "ip",     "rate": 10,   "burst": 20 },
+    { "name": "ip-hourly", "scope": "ip",     "rate": 0.28, "burst": 1000 },
+    { "name": "key-burst", "scope": "key",    "rate": 50,   "burst": 100 },
+    { "name": "global",    "scope": "global", "rate": 500,  "burst": 1000 }
   ]
 }

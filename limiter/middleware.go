@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 type Rule struct {
@@ -17,20 +18,50 @@ type Rule struct {
 func Limit(store *MemoryStore, rules []Rule, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := clientIP(r)
-		h := w.Header()
+		apiKey := r.Header.Get("X-API-Key")
+
+		var tightest *Result
+		var retry time.Duration
+		denied := false
 
 		for _, rule := range rules {
-			res := store.Allow(rule.Name+"|ip:"+ip, rule.Rate, rule.Burst)
+			var scopeKey string
+			switch rule.Scope {
+			case "global":
+				scopeKey = "global"
+			case "ip":
+				scopeKey = "ip:" + ip
+			case "key":
+				if apiKey == "" {
+					continue
+				}
+				scopeKey = "key:" + apiKey
+			}
 
-			h.Set("X-RateLimit-Limit", strconv.Itoa(res.Limit))
-			h.Set("X-RateLimit-Remaining", strconv.Itoa(res.Remaining))
-			h.Set("X-RateLimit-Reset", strconv.FormatInt(res.Reset.Unix(), 10))
+			res := store.Allow(rule.Name+"|"+scopeKey, rule.Rate, rule.Burst)
 
 			if !res.OK {
-				h.Set("Retry-After", strconv.Itoa(int(math.Ceil(res.RetryAfter.Seconds()))))
-				http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-				return
+				denied = true
+				if res.RetryAfter > retry {
+					retry = res.RetryAfter
+				}
 			}
+			if tightest == nil || res.Remaining < tightest.Remaining {
+				tightest = &res
+			}
+		}
+
+		h := w.Header()
+		if tightest != nil {
+			h.Set("X-RateLimit-Limit", strconv.Itoa(tightest.Limit))
+			h.Set("X-RateLimit-Remaining", strconv.Itoa(tightest.Remaining))
+			h.Set("X-RateLimit-Reset", strconv.FormatInt(tightest.Reset.Unix(), 10))
+		}
+
+		if denied {
+			h.Set("Retry-After", strconv.Itoa(int(math.Ceil(retry.Seconds()))))
+			http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+			return
 		}
 
 		next.ServeHTTP(w, r)
