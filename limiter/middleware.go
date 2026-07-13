@@ -1,6 +1,7 @@
 package limiter
 
 import (
+	"log"
 	"math"
 	"net"
 	"net/http"
@@ -15,7 +16,7 @@ type Rule struct {
 	Burst float64 `json:"burst"`
 }
 
-func Limit(store *MemoryStore, rules []Rule, next http.Handler) http.Handler {
+func Limit(store Store, rules []Rule, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := clientIP(r)
 		apiKey := r.Header.Get("X-API-Key")
@@ -38,7 +39,11 @@ func Limit(store *MemoryStore, rules []Rule, next http.Handler) http.Handler {
 				scopeKey = "key:" + apiKey
 			}
 
-			res := store.Allow(rule.Name+"|"+scopeKey, rule.Rate, rule.Burst)
+			res, err := store.Allow(r.Context(), rule.Name+"|"+scopeKey, rule.Rate, rule.Burst)
+			if err != nil {
+				log.Printf("rate limit store error, allowing request: %v", err)
+				continue
+			}
 
 			if !res.OK {
 				denied = true

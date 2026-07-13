@@ -1,9 +1,14 @@
 package limiter
 
 import (
+	"context"
 	"sync"
 	"time"
 )
+
+type Store interface {
+	Allow(ctx context.Context, key string, rate, burst float64) (Result, error)
+}
 
 type Result struct {
 	OK         bool
@@ -29,7 +34,7 @@ func NewMemoryStore() *MemoryStore {
 	return s
 }
 
-func (s *MemoryStore) Allow(key string, rate, burst float64) Result {
+func (s *MemoryStore) Allow(ctx context.Context, key string, rate, burst float64) (Result, error) {
 	now := time.Now()
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -43,7 +48,7 @@ func (s *MemoryStore) Allow(key string, rate, burst float64) Result {
 	}
 	allowed, retry, remaining := e.bucket.Take(now, rate, burst)
 	reset := now.Add(time.Duration((burst - e.bucket.tokens) / rate * float64(time.Second)))
-	return Result{OK: allowed, RetryAfter: retry, Remaining: remaining, Limit: int(burst), Reset: reset}
+	return Result{OK: allowed, RetryAfter: retry, Remaining: remaining, Limit: int(burst), Reset: reset}, nil
 }
 
 func (s *MemoryStore) evictLoop(interval time.Duration) {
